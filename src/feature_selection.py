@@ -4,6 +4,8 @@ from datetime import datetime
 
 
 def get_months_in_range(start_date: datetime, end_date: datetime) -> pd.PeriodIndex:
+    start_date = pd.to_datetime("2017-04-01")
+    end_date = pd.to_datetime("2017-07-31")
     return pd.date_range(start=start_date, end=end_date, freq='MS').to_period('M')
 
 
