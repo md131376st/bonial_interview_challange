@@ -14,7 +14,7 @@ def train_and_evaluate(x_train, y_train, x_val, y_val, models):
             estimator=model_info["model"],
             param_grid=model_info["params"],
             scoring="roc_auc",
-            cv=3,  # Cross-validation for hyperparameter tuning
+            cv=None,  # Cross-validation for hyperparameter tuning
             verbose=1,
             n_jobs=-1
         )

@@ -91,15 +91,16 @@ def engineer_features_all(
         values=['monthly_views', 'monthly_avg_duration', 'monthly_total_pages'],
         fill_value=0
     )
-    monthly_features.columns = [''.join([str(c) for c in col]) for col in monthly_features.columns]
+    monthly_features.columns = ['{}_{}'.format(col[0], str(col[1])) for col in monthly_features.columns]
 
-    # check all months are present
+    # Add missing months
     for ym in months_in_range:
         ym_str = str(ym)
-        if f'monthly_views{ym_str}' not in monthly_features.columns:
-            monthly_features[f'monthly_views{ym_str}'] = 0
-            monthly_features[f'monthly_avg_duration{ym_str}'] = 0
-            monthly_features[f'monthly_total_pages{ym_str}'] = 0
+        for prefix in ['monthly_views', 'monthly_avg_duration', 'monthly_total_pages']:
+            col_name = f"{prefix}_{ym_str}"
+            if col_name not in monthly_features.columns:
+                monthly_features[col_name] = 0
+
 
     features = features.merge(monthly_features, on='userId', how='left')
 
@@ -120,32 +121,22 @@ def engineer_features_all(
     # 4. Trend Features (Month-over-Month Differences)
     # ------------------------------
 
-    trend_agg = bv_period.groupby(['userId', 'year_month']).agg(
-        monthly_views=('userId', 'count')
-    ).reset_index()
+    trend_agg = bv_period.groupby(['userId', 'year_month']).size().unstack(fill_value=0)
+    trend_agg.columns = [f"views_{col}" for col in trend_agg.columns]
 
-    # Pivot by year_month
-    trend_pivot = trend_agg.pivot(index='userId', columns='year_month', values='monthly_views').fillna(0)
-
-    # Ensure all months present in the pivot (in case some months had no data)
+    # Add missing months for trends
     for ym in months_in_range:
-        if ym not in trend_pivot.columns:
-            trend_pivot[ym] = 0
+        col_name = f"views_{ym}"
+        if col_name not in trend_agg.columns:
+            trend_agg[col_name] = 0
 
-    # Sort the columns by year_month period to compute differences correctly
-    sorted_months = sorted(months_in_range)
-    # Rename columns to views_YYYY-MM
-    trend_pivot.rename(columns={m: f'views_{m}' for m in trend_pivot.columns}, inplace=True)
+    trend_agg = trend_agg.sort_index(axis=1)  # Ensure months are in chronological order
+    for i in range(1, len(months_in_range)):
+        curr = months_in_range[i]
+        prev = months_in_range[i - 1]
+        trend_agg[f"views_diff_{curr}_vs_{prev}"] = trend_agg[f"views_{curr}"] - trend_agg[f"views_{prev}"]
 
-    # Compute differences between consecutive months
-    for i in range(1, len(sorted_months)-1):
-        curr = sorted_months[i]
-        prev = sorted_months[i - 1]
-        curr_str = f'views_{curr}'
-        prev_str = f'views_{prev}'
-        trend_pivot[f'views_diff_{curr}_vs_{prev}'] = trend_pivot[curr_str] - trend_pivot[prev_str]
-
-    features = features.merge(trend_pivot, on='userId', how='left')
+    features = features.merge(trend_agg, on='userId', how='left')
     features = features.fillna(0)
 
     return features
